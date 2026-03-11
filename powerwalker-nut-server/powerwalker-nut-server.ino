@@ -10,7 +10,7 @@
 // WiFi
 // =========================
 const char* WIFI_SSID = "willstedt";
-const char* WIFI_PASSWORD = "13734";
+const char* WIFI_PASSWORD = "will13734";
 
 // =========================
 // UPS identity
