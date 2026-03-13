@@ -97,6 +97,7 @@ UpsState g_last_printed;
 bool g_have_last_metric_logged = false;
 uint16_t g_last_metric_logged = 0;
 unsigned long g_last_metric_log_ms = 0;
+unsigned long g_device_open_ms = 0;
 
 struct LastUnknown {
   bool valid = false;
@@ -639,6 +640,15 @@ static esp_err_t start_interrupt_in(usb_transfer_t **xfer,
   return ESP_OK;
 }
 
+static void resetUpsState() {
+  memset(&g_state, 0, sizeof(g_state));
+  memset(&g_last_printed, 0, sizeof(g_last_printed));
+  g_have_last_metric_logged = false;
+  g_last_metric_logged = 0;
+  g_last_metric_log_ms = 0;
+  g_device_open_ms = 0;
+}
+
 static void free_transfers() {
   if (g_xfer81) {
     usb_host_transfer_free(g_xfer81);
@@ -651,7 +661,11 @@ static void free_transfers() {
 }
 
 static void close_device() {
-  if (!g_dev_hdl) return;
+  if (!g_dev_hdl) {
+    resetUpsState();
+    updateDisplay();
+    return;
+  }
 
   free_transfers();
 
@@ -663,6 +677,9 @@ static void close_device() {
 
   usb_host_device_close(g_client, g_dev_hdl);
   g_dev_hdl = nullptr;
+
+  resetUpsState();
+  updateDisplay();
 }
 
 static bool open_and_prepare_device(uint8_t dev_addr) {
@@ -722,6 +739,11 @@ static bool open_and_prepare_device(uint8_t dev_addr) {
     close_device();
     return false;
   }
+
+  g_device_open_ms = millis();
+  resetUpsState();
+  g_device_open_ms = millis();
+  updateDisplay();
 
   return true;
 }
@@ -848,11 +870,9 @@ static String htmlPage() {
   html += "</div>";
 
   html += "<div class='grid'>";
-  html += "<div class='card'><div class='card-top'><div class='label'>UPS status</div><div class='icon'>" + htmlIconPower() + "</div></div><div class='value'>" + nut + "</div><div class='small'>Flags: 0x" + String((unsigned long)g_state.flags, HEX) + "</div></div>";
-  html += "<div class='card'><div class='card-top'><div class='label'>Charge percent</div><div class='icon'>" + htmlIconBattery() + "</div></div><div class='value'>" + charge + "</div><div class='small'>Reported from USB tag 0x34</div></div>";
-  html += "<div class='card'><div class='card-top'><div class='label'>Battery metric</div><div class='icon'>" + htmlIconBattery() + "</div></div><div class='value'>" + metric + "</div><div class='small'>Raw metric from USB tag 0x35</div></div>";
-  html += "<div class='card'><div class='card-top'><div class='label'>Load estimate</div><div class='icon'>" + htmlIconLoad() + "</div></div><div class='value'>" + load + "</div><div class='small'>Current estimated UPS load</div></div>";
-  html += "<div class='card'><div class='card-top'><div class='label'>Input voltage</div><div class='icon'>" + htmlIconPower() + "</div></div><div class='value'>" + inV + "</div><div class='small'>Estimated input voltage</div></div>";
+  html += "<div class='card'><div class='card-top'><div class='label'>UPS status</div><div class='icon'>" + htmlIconPower() + "</div></div><div class='value'>" + nut + "</div></div>";
+  html += "<div class='card'><div class='card-top'><div class='label'>Charge percent</div><div class='icon'>" + htmlIconBattery() + "</div></div><div class='value'>" + charge + "</div><div class='small'>Reported from USB</div></div>";
+  html += "<div class='card'><div class='card-top'><div class='label'>Battery metric</div><div class='icon'>" + htmlIconBattery() + "</div></div><div class='value'>" + metric + "</div><div class='small'>Raw metric from USB</div></div>";
   html += "<div class='card'><div class='card-top'><div class='label'>Output voltage</div><div class='icon'>" + htmlIconPower() + "</div></div><div class='value'>" + outV + "</div><div class='small'>Nominal output voltage</div></div>";
   html += "<div class='card'><div class='card-top'><div class='label'>Runtime estimate</div><div class='icon'>" + htmlIconClock() + "</div></div><div class='value'>" + mins + "</div><div class='small'>Approximate remaining runtime</div></div>";
   html += "<div class='card'><div class='card-top'><div class='label'>Network</div><div class='icon'>" + htmlIconWifi() + "</div></div><div class='value' style='font-size:22px'>" + ip + "</div><div class='small'><a href='/json'>Open JSON endpoint</a></div></div>";
@@ -1473,6 +1493,9 @@ void setup() {
 
   snmpUdp.begin(161);
   Serial.println("SNMP server started on port 161");
+
+  Serial.println("Waiting before USB host start...");
+  delay(3000);
 
   usb_host_config_t host_config = {};
   host_config.skip_phy_setup = false;
