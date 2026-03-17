@@ -98,6 +98,8 @@ bool g_have_last_metric_logged = false;
 uint16_t g_last_metric_logged = 0;
 unsigned long g_last_metric_log_ms = 0;
 unsigned long g_device_open_ms = 0;
+unsigned long g_last_any_packet_ms = 0;
+bool g_have_seen_any_packet = false;
 
 struct LastUnknown {
   bool valid = false;
@@ -190,7 +192,7 @@ static bool is_switching_flags(uint32_t flags) {
 }
 
 static bool isUpsUsbConnected() {
-  return g_dev_hdl != nullptr && g_dev_present;
+  return g_dev_present;
 }
 
 static const char *power_state_text(uint32_t flags) {
@@ -537,6 +539,12 @@ static void maybe_log_unknown(uint8_t ep, const uint8_t *buf, uint8_t len) {
 static void handle_packet(uint8_t ep, const uint8_t *buf, uint8_t len) {
   if (len < 2) return;
 
+  g_have_seen_any_packet = true;
+  g_last_any_packet_ms = millis();
+  Serial.printf("[%10lu ms] PKT EP 0x%02X len=%u tag=0x%02X data=", millis(), ep, len, buf[0]);
+  print_hex(buf, len);
+  Serial.println();
+
   switch (buf[0]) {
     case 0x32: {
       if (len >= 4) {
@@ -647,6 +655,8 @@ static void resetUpsState() {
   g_last_metric_logged = 0;
   g_last_metric_log_ms = 0;
   g_device_open_ms = 0;
+  g_last_any_packet_ms = 0;
+  g_have_seen_any_packet = false;
 }
 
 static void free_transfers() {
@@ -740,9 +750,10 @@ static bool open_and_prepare_device(uint8_t dev_addr) {
     return false;
   }
 
-  g_device_open_ms = millis();
   resetUpsState();
   g_device_open_ms = millis();
+  g_last_any_packet_ms = 0;
+  g_have_seen_any_packet = false;
   updateDisplay();
 
   return true;
@@ -870,9 +881,11 @@ static String htmlPage() {
   html += "</div>";
 
   html += "<div class='grid'>";
-  html += "<div class='card'><div class='card-top'><div class='label'>UPS status</div><div class='icon'>" + htmlIconPower() + "</div></div><div class='value'>" + nut + "</div></div>";
-  html += "<div class='card'><div class='card-top'><div class='label'>Charge percent</div><div class='icon'>" + htmlIconBattery() + "</div></div><div class='value'>" + charge + "</div><div class='small'>Reported from USB</div></div>";
-  html += "<div class='card'><div class='card-top'><div class='label'>Battery metric</div><div class='icon'>" + htmlIconBattery() + "</div></div><div class='value'>" + metric + "</div><div class='small'>Raw metric from USB</div></div>";
+  html += "<div class='card'><div class='card-top'><div class='label'>UPS status</div><div class='icon'>" + htmlIconPower() + "</div></div><div class='value'>" + nut + "</div><div class='small'>Flags: 0x" + String((unsigned long)g_state.flags, HEX) + "</div></div>";
+  html += "<div class='card'><div class='card-top'><div class='label'>Charge percent</div><div class='icon'>" + htmlIconBattery() + "</div></div><div class='value'>" + charge + "</div><div class='small'>Reported from USB tag 0x34</div></div>";
+  html += "<div class='card'><div class='card-top'><div class='label'>Battery metric</div><div class='icon'>" + htmlIconBattery() + "</div></div><div class='value'>" + metric + "</div><div class='small'>Raw metric from USB tag 0x35</div></div>";
+  html += "<div class='card'><div class='card-top'><div class='label'>Load estimate</div><div class='icon'>" + htmlIconLoad() + "</div></div><div class='value'>" + load + "</div><div class='small'>Current estimated UPS load</div></div>";
+  html += "<div class='card'><div class='card-top'><div class='label'>Input voltage</div><div class='icon'>" + htmlIconPower() + "</div></div><div class='value'>" + inV + "</div><div class='small'>Estimated input voltage</div></div>";
   html += "<div class='card'><div class='card-top'><div class='label'>Output voltage</div><div class='icon'>" + htmlIconPower() + "</div></div><div class='value'>" + outV + "</div><div class='small'>Nominal output voltage</div></div>";
   html += "<div class='card'><div class='card-top'><div class='label'>Runtime estimate</div><div class='icon'>" + htmlIconClock() + "</div></div><div class='value'>" + mins + "</div><div class='small'>Approximate remaining runtime</div></div>";
   html += "<div class='card'><div class='card-top'><div class='label'>Network</div><div class='icon'>" + htmlIconWifi() + "</div></div><div class='value' style='font-size:22px'>" + ip + "</div><div class='small'><a href='/json'>Open JSON endpoint</a></div></div>";

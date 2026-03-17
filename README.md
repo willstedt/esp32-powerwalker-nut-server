@@ -13,6 +13,14 @@ Montera en liten OLED-skärm 128x64 (med fyra pinnar: 3V3, GND, SDA och SCL). De
 `SDA = GPIO 8`  
 `SCL = GPIO 9`
 
+Montera en liten tryckknapp för att resetta enheten, samt i framtiden kunna ändra wifi-inställningar etc.
+Tryckknappen ska kopplas mot `SDA = GPIO 10` och `GND`.  
+  
+STL för att 3D-printa box och lock:  
+[Box](BlueWalker Connect Case.stl)  
+[Lock](Bluewalker Connect Lid.stl)  
+
+
 # Användning
 **NUT:** UPS-servern använder sig av NUT (Network UPS Tools) som gör att enheter på nätverket kan få information från UPS:en.
 
